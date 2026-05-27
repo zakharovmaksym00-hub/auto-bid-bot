@@ -15,28 +15,106 @@ const taskFilter = new TaskFilter();
 
 async function loginToFreelancer(page) {
   try {
-    await page.goto('https://www.freelancer.com/', { waitUntil: 'networkidle2' });
+    console.log('📍 Navigating to Freelancer.com...');
+    await page.goto('https://www.freelancer.com/', { 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    });
     
-    // Click login button
-    const loginBtn = await page.$('[data-test="login-button"]') || await page.$('a[href="/login"]');
-    if (loginBtn) await loginBtn.click();
+    await page.waitForTimeout(3000); // Wait for JS to render
     
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+    console.log('📍 Looking for login button...');
     
-    // Fill email
-    await page.type('[type="email"]', FREELANCER_EMAIL);
+    // Try multiple selectors for login button
+    const loginBtn = await page.$('a[href*="/login"]') 
+      || await page.$('[data-test="login-button"]')
+      || await page.$('button:has-text("Log In")')
+      || await page.$('a:has-text("Log In")');
     
-    // Fill password
-    await page.type('[type="password"]', FREELANCER_PASSWORD);
+    if (!loginBtn) {
+      console.log('⚠️  Login button not found, trying alternative method...');
+      // Try clicking by text content
+      await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a'));
+        const loginLink = links.find(link => link.textContent.includes('Log In'));
+        if (loginLink) loginLink.click();
+      });
+    } else {
+      await loginBtn.click();
+    }
     
-    // Click login
-    const submitBtn = await page.$('[type="submit"]');
-    if (submitBtn) await submitBtn.click();
+    console.log('📍 Waiting for login page to load...');
+    await page.waitForNavigation({ 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    }).catch(() => console.log('⚠️  Navigation timeout, continuing anyway...'));
     
-    await page.waitForNavigation({ waitUntil: 'networkidle2' });
+    await page.waitForTimeout(2000);
     
-    console.log('✓ Logged in successfully');
-    return true;
+    console.log('📍 Filling email...');
+    const emailInput = await page.$('input[type="email"]') 
+      || await page.$('input[name*="email"]')
+      || await page.$('input[placeholder*="email"]');
+    
+    if (!emailInput) {
+      console.log('❌ Email input not found');
+      return false;
+    }
+    
+    await emailInput.type(FREELANCER_EMAIL, { delay: 50 });
+    await page.waitForTimeout(1000);
+    
+    console.log('📍 Filling password...');
+    const passwordInput = await page.$('input[type="password"]') 
+      || await page.$('input[name*="password"]');
+    
+    if (!passwordInput) {
+      console.log('❌ Password input not found');
+      return false;
+    }
+    
+    await passwordInput.type(FREELANCER_PASSWORD, { delay: 50 });
+    await page.waitForTimeout(1000);
+    
+    console.log('📍 Clicking submit button...');
+    const submitBtn = await page.$('button[type="submit"]') 
+      || await page.$('button:has-text("Log In")')
+      || await page.$('button:has-text("Sign In")');
+    
+    if (!submitBtn) {
+      console.log('❌ Submit button not found');
+      return false;
+    }
+    
+    await submitBtn.click();
+    await page.waitForTimeout(3000);
+    
+    // Wait for navigation or specific element that indicates login success
+    try {
+      await page.waitForNavigation({ 
+        waitUntil: 'domcontentloaded',
+        timeout: 30000 
+      });
+    } catch (e) {
+      console.log('⚠️  Navigation timeout after login, checking if logged in...');
+    }
+    
+    await page.waitForTimeout(3000);
+    
+    // Check if we're logged in by looking for profile/dashboard elements
+    const isLoggedIn = await page.evaluate(() => {
+      return document.body.textContent.includes('Dashboard') 
+        || document.body.textContent.includes('My Projects')
+        || !!document.querySelector('a[href*="/profile"]');
+    });
+    
+    if (isLoggedIn) {
+      console.log('✓ Logged in successfully');
+      return true;
+    } else {
+      console.log('❌ Login verification failed');
+      return false;
+    }
   } catch (error) {
     console.error('✗ Login failed:', error.message);
     return false;
@@ -45,9 +123,15 @@ async function loginToFreelancer(page) {
 
 async function searchProjects(page, keywords) {
   try {
-    const searchUrl = `https://www.freelancer.com/projects/search/?q=${encodeURIComponent(keywords)}`;
-    await page.goto(searchUrl, { waitUntil: 'networkidle2' });
-    await page.waitForTimeout(2000);
+    const searchUrl = `https://www.freelancer.com/projects/search?q=${encodeURIComponent(keywords)}`;
+    console.log(`📍 Navigating to search: ${searchUrl}`);
+    
+    await page.goto(searchUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    });
+    
+    await page.waitForTimeout(3000);
     console.log(`✓ Searching for: ${keywords}`);
     return true;
   } catch (error) {
@@ -59,16 +143,30 @@ async function searchProjects(page, keywords) {
 async function getProjectDetails(page, projectElement) {
   try {
     const projectData = await projectElement.evaluate(el => {
-      const titleEl = el.querySelector('[data-test="project-card-title"]') || el.querySelector('h2');
-      const budgetEl = el.querySelector('[data-test="budget"]') || el.querySelector('.budget');
-      const descEl = el.querySelector('[data-test="project-description"]') || el.querySelector('.description');
-      const skillsEl = el.querySelector('[data-test="skills"]') || el.querySelector('.skills');
+      // Try multiple selectors
+      const titleEl = el.querySelector('[data-test="project-card-title"]') 
+        || el.querySelector('h2') 
+        || el.querySelector('.project-title')
+        || el.querySelector('a[href*="/projects/"]');
+      
+      const budgetEl = el.querySelector('[data-test="budget"]') 
+        || el.querySelector('.budget')
+        || el.querySelector('[class*="budget"]');
+      
+      const descEl = el.querySelector('[data-test="project-description"]') 
+        || el.querySelector('.description')
+        || el.querySelector('[class*="description"]');
+      
+      const skillsEl = el.querySelector('[data-test="skills"]') 
+        || el.querySelector('.skills')
+        || el.querySelector('[class*="skills"]');
+      
       const linkEl = el.querySelector('a[href*="/projects/"]');
       
       return {
-        title: titleEl ? titleEl.textContent.trim() : '',
+        title: titleEl ? titleEl.textContent.trim().substring(0, 100) : '',
         budget: budgetEl ? budgetEl.textContent.trim() : '',
-        description: descEl ? descEl.textContent.trim() : '',
+        description: descEl ? descEl.textContent.trim().substring(0, 200) : '',
         skills: skillsEl ? skillsEl.textContent.trim() : '',
         url: linkEl ? linkEl.href : '',
       };
@@ -82,14 +180,19 @@ async function getProjectDetails(page, projectElement) {
 
 async function placeBid(page, projectUrl, bidAmount) {
   try {
-    await page.goto(projectUrl, { waitUntil: 'networkidle2' });
+    console.log(`📍 Opening project: ${projectUrl}`);
+    await page.goto(projectUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    });
     await page.waitForTimeout(2000);
     
     // Get project title and description
     const projectInfo = await page.evaluate(() => {
       const title = document.querySelector('h1') ? document.querySelector('h1').textContent.trim() : '';
-      const description = document.querySelector('[data-test="project-description"]') ? 
-        document.querySelector('[data-test="project-description"]').textContent.trim() : '';
+      const description = document.querySelector('[data-test="project-description"]') 
+        ? document.querySelector('[data-test="project-description"]').textContent.trim() 
+        : document.body.textContent.substring(0, 500);
       return { title, description };
     });
     
@@ -109,38 +212,53 @@ async function placeBid(page, projectUrl, bidAmount) {
     console.log(`✓ Generated message: ${bidMessage.substring(0, 100)}...`);
     
     // Click bid button
-    const bidBtn = await page.$('[data-test="bid-button"]') || await page.$('button:contains("Bid")');
+    const bidBtn = await page.$('[data-test="bid-button"]') 
+      || await page.$('button:has-text("Bid")')
+      || await page.$('button[class*="bid"]');
+    
     if (!bidBtn) {
-      console.log('✗ Bid button not found');
+      console.log('⚠️  Bid button not found - project may not allow bidding');
       return false;
     }
     
     await bidBtn.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
     
     // Fill bid amount
-    const bidInput = await page.$('[name="bidAmount"]') || await page.$('input[type="number"]');
+    const bidInput = await page.$('input[type="number"]') 
+      || await page.$('input[name*="bid"]')
+      || await page.$('input[placeholder*="amount"]');
+    
     if (bidInput) {
       await bidInput.click({ clickCount: 3 });
-      await bidInput.type(bidAmount.toString());
+      await bidInput.type(bidAmount.toString(), { delay: 50 });
     }
     
     // Fill message
-    const messageInput = await page.$('[name="message"]') || await page.$('textarea');
+    const messageInput = await page.$('textarea') 
+      || await page.$('textarea[name*="message"]')
+      || await page.$('div[contenteditable="true"]');
+    
     if (messageInput) {
       await messageInput.click();
-      await messageInput.type(bidMessage);
+      await messageInput.type(bidMessage, { delay: 10 });
     }
     
+    await page.waitForTimeout(1000);
+    
     // Submit bid
-    const submitBtn = await page.$('[data-test="submit-bid"]') || await page.$('button[type="submit"]');
+    const submitBtn = await page.$('button[type="submit"]') 
+      || await page.$('button:has-text("Place Bid")')
+      || await page.$('button:has-text("Submit")');
+    
     if (submitBtn) {
       await submitBtn.click();
       await page.waitForTimeout(2000);
+      console.log(`✓ Bid placed: $${bidAmount}`);
+      return true;
     }
     
-    console.log(`✓ Bid placed: $${bidAmount}`);
-    return true;
+    return false;
   } catch (error) {
     console.error(`✗ Failed to place bid: ${error.message}`);
     return false;
@@ -148,76 +266,114 @@ async function placeBid(page, projectUrl, bidAmount) {
 }
 
 async function runBot() {
-  const browser = await puppeteer.launch({
-    headless: HEADLESS_MODE,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-  
-  let bidsPlaced = 0;
-  let bidsSkipped = 0;
+  let browser;
   
   try {
+    console.log('🚀 Starting Freelancer Auto Bid Bot...\n');
+    
+    browser = await puppeteer.launch({
+      headless: HEADLESS_MODE,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720 });
+    
+    // Set longer timeout for slow networks
+    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(60000);
     
     // Login
     const loggedIn = await loginToFreelancer(page);
     if (!loggedIn) {
-      console.error('✗ Failed to login. Exiting...');
+      console.error('\n❌ Failed to login. Please check:');
+      console.error('   1. Your email and password in .env file');
+      console.error('   2. Your internet connection');
+      console.error('   3. If Freelancer website is accessible');
       return;
     }
     
     // Search for projects
     const searchKeywords = process.env.SEARCH_KEYWORDS || 'nodejs';
-    await searchProjects(page, searchKeywords);
+    const searched = await searchProjects(page, searchKeywords);
+    if (!searched) {
+      console.error('\n❌ Failed to search for projects');
+      return;
+    }
+    
+    // Wait for projects to load
+    await page.waitForTimeout(3000);
     
     // Get project links
-    const projectElements = await page.$$('[data-test="project-card"]') || await page.$$('div[class*="project"]');
+    const projectElements = await page.$$('[data-test="project-card"]') 
+      || await page.$$('div[class*="project-card"]')
+      || await page.$$('a[href*="/projects/"]');
     
-    console.log(`\n🔍 Found ${projectElements.length} projects`);
+    console.log(`\n🔍 Found ${projectElements.length} projects\n`);
+    
+    if (projectElements.length === 0) {
+      console.log('⚠️  No projects found. The website structure may have changed.');
+      console.log('   Try visiting https://www.freelancer.com manually to check.');
+      return;
+    }
+    
+    let bidsPlaced = 0;
+    let bidsSkipped = 0;
     
     // Filter and bid on projects
     for (let i = 0; i < Math.min(projectElements.length, MAX_PROJECTS_TO_BID); i++) {
-      const projectElement = projectElements[i];
-      const projectData = await getProjectDetails(projectElement);
-      
-      if (!projectData || !projectData.url) continue;
-      
-      console.log(`\n📋 Project ${i + 1}: ${projectData.title}`);
-      console.log(`   Budget: ${projectData.budget}`);
-      console.log(`   Skills: ${projectData.skills}`);
-      
-      // Filter project
-      const isQualified = taskFilter.filterTask(projectData);
-      
-      if (!isQualified) {
-        console.log('✗ Project filtered out - does not match criteria');
+      try {
+        const projectElement = projectElements[i];
+        const projectData = await getProjectDetails(projectElement);
+        
+        if (!projectData || !projectData.url) {
+          bidsSkipped++;
+          continue;
+        }
+        
+        console.log(`\n📋 Project ${i + 1}: ${projectData.title || 'Untitled'}`);
+        if (projectData.budget) console.log(`   Budget: ${projectData.budget}`);
+        if (projectData.skills) console.log(`   Skills: ${projectData.skills}`);
+        
+        // Filter project
+        const isQualified = taskFilter.filterTask(projectData);
+        
+        if (!isQualified) {
+          console.log('✗ Project filtered out - does not match criteria');
+          bidsSkipped++;
+          continue;
+        }
+        
+        // Place bid
+        const success = await placeBid(page, projectData.url, BID_AMOUNT);
+        
+        if (success) {
+          bidsPlaced++;
+        } else {
+          bidsSkipped++;
+        }
+        
+        // Wait between bids
+        if (i < projectElements.length - 1) {
+          console.log(`⏳ Waiting ${DELAY_BETWEEN_BIDS}ms before next bid...`);
+          await page.waitForTimeout(DELAY_BETWEEN_BIDS);
+        }
+      } catch (error) {
+        console.error(`⚠️  Error processing project ${i + 1}:`, error.message);
         bidsSkipped++;
-        continue;
-      }
-      
-      // Place bid
-      const success = await placeBid(page, projectData.url, BID_AMOUNT);
-      
-      if (success) {
-        bidsPlaced++;
-      } else {
-        bidsSkipped++;
-      }
-      
-      // Wait between bids
-      if (i < projectElements.length - 1) {
-        await page.waitForTimeout(DELAY_BETWEEN_BIDS);
       }
     }
     
     console.log(`\n✓ Bot completed!`);
     console.log(`   Bids placed: ${bidsPlaced}`);
     console.log(`   Bids skipped: ${bidsSkipped}`);
+    
   } catch (error) {
-    console.error('✗ Error:', error);
+    console.error('\n✗ Critical error:', error.message);
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
 
