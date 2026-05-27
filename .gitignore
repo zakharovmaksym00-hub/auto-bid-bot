@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Browser
+.chromium/
+Chromium/
+
+# Cache
+.cache/
+.npm/
+.eslintcache
+
+# Temp
+tmp/
+temp/
+dist/
+build/
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,32 @@
+{
+  "name": "auto-bid-bot",
+  "version": "2.0.0",
+  "description": "Advanced Freelancer bidding bot with ChatGPT integration and AI-powered bid messages",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start-ai-server": "node ai-server.js",
+    "dev": "nodemon index.js",
+    "dev-ai-server": "nodemon ai-server.js",
+    "dev-all": "concurrently \"npm run dev\" \"npm run dev-ai-server\""
+  },
+  "keywords": [
+    "freelancer",
+    "bidding",
+    "automation",
+    "chatgpt",
+    "ai"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.0",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "concurrently": "^8.2.0"
+  }
+}
