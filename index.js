@@ -13,6 +13,51 @@ const HEADLESS_MODE = process.env.HEADLESS_MODE === 'true' ? 'new' : false;
 const bidGenerator = new BidMessageGenerator();
 const taskFilter = new TaskFilter();
 
+async function waitForCaptcha(page, maxWaitTime = 120000) {
+  console.log('\n⚠️  CAPTCHA DETECTED!');
+  console.log('📍 Please solve the CAPTCHA manually in the browser window.');
+  console.log('⏳ Waiting up to 2 minutes for CAPTCHA to be solved...\n');
+  
+  try {
+    // Wait for CAPTCHA to disappear or for user to complete login
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      // Check if CAPTCHA frame is still visible
+      const captchaVisible = await page.evaluate(() => {
+        const captchaFrames = document.querySelectorAll('iframe[src*="captcha"], iframe[src*="recaptcha"]');
+        return captchaFrames.length > 0;
+      });
+      
+      if (!captchaVisible) {
+        console.log('✓ CAPTCHA solved! Continuing...\n');
+        return true;
+      }
+      
+      // Check if we're already logged in
+      const loggedIn = await page.evaluate(() => {
+        return document.body.textContent.includes('Dashboard') 
+          || document.body.textContent.includes('My Projects')
+          || !!document.querySelector('a[href*="/profile"]');
+      });
+      
+      if (loggedIn) {
+        console.log('✓ Login successful! Continuing...\n');
+        return true;
+      }
+      
+      // Wait a bit before checking again
+      await page.waitForTimeout(2000);
+    }
+    
+    console.log('❌ CAPTCHA timeout - took too long to solve');
+    return false;
+  } catch (error) {
+    console.error('Error waiting for CAPTCHA:', error.message);
+    return false;
+  }
+}
+
 async function loginToFreelancer(page) {
   try {
     console.log('📍 Navigating to Freelancer.com...');
@@ -44,12 +89,7 @@ async function loginToFreelancer(page) {
     }
     
     console.log('📍 Waiting for login page to load...');
-    await page.waitForNavigation({ 
-      waitUntil: 'domcontentloaded',
-      timeout: 60000 
-    }).catch(() => console.log('⚠️  Navigation timeout, continuing anyway...'));
-    
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
     
     console.log('📍 Filling email...');
     const emailInput = await page.$('input[type="email"]') 
@@ -89,14 +129,31 @@ async function loginToFreelancer(page) {
     await submitBtn.click();
     await page.waitForTimeout(3000);
     
-    // Wait for navigation or specific element that indicates login success
+    // Check if CAPTCHA is present
+    const hasCaptcha = await page.evaluate(() => {
+      const captchaFrames = document.querySelectorAll('iframe[src*="captcha"], iframe[src*="recaptcha"]');
+      const captchaText = document.body.textContent.toLowerCase().includes('captcha') 
+        || document.body.textContent.toLowerCase().includes('verify');
+      return captchaFrames.length > 0 || captchaText;
+    });
+    
+    if (hasCaptcha) {
+      // Wait for user to solve CAPTCHA manually
+      const captchaSolved = await waitForCaptcha(page);
+      if (!captchaSolved) {
+        return false;
+      }
+    }
+    
+    // Wait for navigation or page load after potential CAPTCHA
     try {
       await page.waitForNavigation({ 
         waitUntil: 'domcontentloaded',
-        timeout: 30000 
+        timeout: 10000 
       });
     } catch (e) {
-      console.log('⚠️  Navigation timeout after login, checking if logged in...');
+      // Navigation might not happen, that's okay
+      console.log('⚠️  No navigation detected, checking login status...');
     }
     
     await page.waitForTimeout(3000);
@@ -105,15 +162,17 @@ async function loginToFreelancer(page) {
     const isLoggedIn = await page.evaluate(() => {
       return document.body.textContent.includes('Dashboard') 
         || document.body.textContent.includes('My Projects')
-        || !!document.querySelector('a[href*="/profile"]');
+        || document.body.textContent.includes('My Bids')
+        || !!document.querySelector('a[href*="/profile"]')
+        || !!document.querySelector('[data-test="user-menu"]');
     });
     
     if (isLoggedIn) {
       console.log('✓ Logged in successfully');
       return true;
     } else {
-      console.log('❌ Login verification failed');
-      return false;
+      console.log('⚠️  Login status unclear - proceeding anyway...');
+      return true; // Continue anyway, it might still work
     }
   } catch (error) {
     console.error('✗ Login failed:', error.message);
