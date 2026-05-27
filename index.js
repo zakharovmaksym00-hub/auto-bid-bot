@@ -8,7 +8,7 @@ const FREELANCER_PASSWORD = process.env.FREELANCER_PASSWORD;
 const BID_AMOUNT = process.env.BID_AMOUNT || 50;
 const MAX_PROJECTS_TO_BID = process.env.MAX_PROJECTS_TO_BID || 10;
 const DELAY_BETWEEN_BIDS = process.env.DELAY_BETWEEN_BIDS || 3000;
-const HEADLESS_MODE = process.env.HEADLESS_MODE === 'true';
+const HEADLESS_MODE = process.env.HEADLESS_MODE === 'true' ? 'new' : false;
 
 const bidGenerator = new BidMessageGenerator();
 const taskFilter = new TaskFilter();
