@@ -169,46 +169,20 @@ async function loginToFreelancer(page) {
   }
 }
 
-async function navigateToDashboard(page) {
+async function navigateToSearchProjects(page) {
   try {
-    console.log('📍 Navigating to your dashboard...');
+    console.log('📍 Navigating to search projects page...');
+    await page.goto('https://www.freelancer.com/search/projects', { 
+      waitUntil: 'domcontentloaded',
+      timeout: 60000 
+    });
     
-    // Try different dashboard URLs
-    const dashboardUrls = [
-      'https://www.freelancer.com/dashboard',
-      'https://www.freelancer.com/project/dashboard',
-      'https://www.freelancer.com/home',
-      'https://www.freelancer.com/'
-    ];
-    
-    for (const url of dashboardUrls) {
-      try {
-        console.log(`📍 Trying: ${url}`);
-        await page.goto(url, { 
-          waitUntil: 'domcontentloaded',
-          timeout: 60000 
-        });
-        
-        await page.waitForTimeout(3000);
-        
-        // Check if we found projects on this page
-        const hasProjects = await page.evaluate(() => {
-          return document.body.textContent.length > 1000; // Basic check for content
-        });
-        
-        if (hasProjects) {
-          console.log('✓ Successfully navigated to dashboard');
-          return true;
-        }
-      } catch (error) {
-        console.log(`⚠️  Failed to load ${url}`);
-      }
-    }
-    
-    return true; // Continue anyway
+    await page.waitForTimeout(3000);
+    console.log('✓ Successfully navigated to search projects page');
+    return true;
   } catch (error) {
-    console.error('✗ Navigation to dashboard failed:', error.message);
-    return true; // Continue anyway
+    console.error('✗ Navigation to search projects failed:', error.message);
+    return false;
   }
 }
 
@@ -254,7 +228,7 @@ async function getProjectDetails(page, projectElement) {
 
 async function placeBid(page, projectUrl, bidAmount) {
   try {
-    console.log(`📍 Opening project...`);
+    console.log('📍 Opening project...');
     await page.goto(projectUrl, { 
       waitUntil: 'domcontentloaded',
       timeout: 60000 
@@ -270,7 +244,7 @@ async function placeBid(page, projectUrl, bidAmount) {
       return { title, description };
     });
     
-    console.log(`\n📝 Generating bid message using ChatGPT...`);
+    console.log('\n📝 Generating bid message using ChatGPT...');
     const bidMessage = await bidGenerator.generateBidMessage({
       projectTitle: projectInfo.title,
       projectDescription: projectInfo.description,
@@ -307,9 +281,11 @@ async function placeBid(page, projectUrl, bidAmount) {
     }
     
     const messageInput = await page.$('textarea') 
-      || await page.$('textarea[name*="message"]')\n      || await page.$('div[contenteditable="true"]');
+      || await page.$('textarea[name*="message"]')
+      || await page.$('div[contenteditable="true"]');
     
-    if (messageInput) {\n      await messageInput.click();
+    if (messageInput) {
+      await messageInput.click();
       await messageInput.type(bidMessage, { delay: 10 });
     }
     
@@ -362,9 +338,14 @@ async function runBot() {
       return;
     }
     
-    // Step 2: Navigate to Dashboard\n    console.log('\n📌 STEP 2: Navigate to Dashboard');
-    console.log('═════════════════════════════════\n');
-    await navigateToDashboard(page);
+    // Step 2: Navigate to Search Projects
+    console.log('\n📌 STEP 2: Navigate to Search Projects');
+    console.log('═════════════════════════════════════\n');
+    const navigated = await navigateToSearchProjects(page);
+    if (!navigated) {
+      console.error('\n❌ Failed to navigate to search projects page');
+      return;
+    }
     
     // Step 3: Find projects
     console.log('\n📌 STEP 3: Finding Projects');
@@ -379,7 +360,7 @@ async function runBot() {
     console.log(`🔍 Found ${projectElements.length} projects\n`);
     
     if (projectElements.length === 0) {
-      console.log('⚠️  No projects found on dashboard.');
+      console.log('⚠️  No projects found.');
       console.log('   Check if there are available projects or the page structure changed.');
       return;
     }
@@ -402,4 +383,56 @@ async function runBot() {
         }
         
         console.log(`\n📋 Project ${i + 1}: ${projectData.title || 'Untitled'}`);
-        if (projectData.budget) console.log(`   💰 Budget: ${projectData.budget}`);\n        if (projectData.skills) console.log(`   🔧 Skills: ${projectData.skills}`);\n        \n        // Filter project\n        const isQualified = taskFilter.filterTask(projectData);\n        \n        if (!isQualified) {\n          console.log('   ✗ Filtered out - does not match your profile');\n          bidsSkipped++;\n          continue;\n        }\n        \n        console.log('   ✓ Suitable for your profile - placing bid...');\n        \n        // Place bid\n        const success = await placeBid(page, projectData.url, BID_AMOUNT);\n        \n        if (success) {\n          bidsPlaced++;\n        } else {\n          bidsSkipped++;\n        }\n        \n        // Wait between bids\n        if (i < projectElements.length - 1) {\n          console.log(`\\n⏳ Waiting before next project...`);\n          await page.waitForTimeout(DELAY_BETWEEN_BIDS);\n        }\n      } catch (error) {\n        console.error(`⚠️  Error processing project ${i + 1}:`, error.message);\n        bidsSkipped++;\n      }\n    }\n    \n    // Final Summary\n    console.log(`\\n${'═'.repeat(50)}`);\n    console.log('✓ BOT COMPLETED!');\n    console.log(`${'═'.repeat(50)}`);\n    console.log(`📊 Results:`);\n    console.log(`   ✓ Bids Placed: ${bidsPlaced}`);\n    console.log(`   ✗ Bids Skipped: ${bidsSkipped}`);\n    console.log(`   📈 Total Scanned: ${bidsPlaced + bidsSkipped}`);\n    \n  } catch (error) {\n    console.error('\\n✗ Critical error:', error.message);\n  } finally {\n    if (browser) {\n      await browser.close();\n    }\n  }\n}\n\nrunBot();
+        if (projectData.budget) console.log(`   💰 Budget: ${projectData.budget}`);
+        if (projectData.skills) console.log(`   🔧 Skills: ${projectData.skills}`);
+        
+        // Filter project
+        const isQualified = taskFilter.filterTask(projectData);
+        
+        if (!isQualified) {
+          console.log('   ✗ Filtered out - does not match your profile');
+          bidsSkipped++;
+          continue;
+        }
+        
+        console.log('   ✓ Suitable for your profile - placing bid...');
+        
+        // Place bid
+        const success = await placeBid(page, projectData.url, BID_AMOUNT);
+        
+        if (success) {
+          bidsPlaced++;
+        } else {
+          bidsSkipped++;
+        }
+        
+        // Wait between bids
+        if (i < projectElements.length - 1) {
+          console.log('\n⏳ Waiting before next project...');
+          await page.waitForTimeout(DELAY_BETWEEN_BIDS);
+        }
+      } catch (error) {
+        console.error(`⚠️  Error processing project ${i + 1}:`, error.message);
+        bidsSkipped++;
+      }
+    }
+    
+    // Final Summary
+    console.log(`\n${'═'.repeat(50)}`);
+    console.log('✓ BOT COMPLETED!');
+    console.log(`${'═'.repeat(50)}`);
+    console.log('📊 Results:');
+    console.log(`   ✓ Bids Placed: ${bidsPlaced}`);
+    console.log(`   ✗ Bids Skipped: ${bidsSkipped}`);
+    console.log(`   📈 Total Scanned: ${bidsPlaced + bidsSkipped}`);
+    
+  } catch (error) {
+    console.error('\n✗ Critical error:', error.message);
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+runBot();
