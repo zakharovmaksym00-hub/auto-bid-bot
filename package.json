@@ -4,11 +4,11 @@
   "description": "Advanced Freelancer bidding bot with ChatGPT integration and AI-powered bid messages",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "start-ai-server": "node ai-server.js",
-    "dev": "nodemon index.js",
-    "dev-ai-server": "nodemon ai-server.js",
-    "dev-all": "concurrently \"npm run dev\" \"npm run dev-ai-server\""
+    "start": "node init && node index.js",
+    "start-ai-server": "node init && node ai-server.js",
+    "dev": "node init && nodemon index.js",
+    "dev-ai-server": "node init && nodemon ai-server.js",
+    "dev-all": "node init && concurrently \"npm run dev\" \"npm run dev-ai-server\""
   },
   "keywords": [
     "freelancer",
